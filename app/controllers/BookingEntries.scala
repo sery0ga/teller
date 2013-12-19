@@ -85,7 +85,7 @@ object BookingEntries extends Controller with Security {
    */
   def add = SecuredRestrictedAction(Viewer) { implicit request ⇒
     implicit handler ⇒
-      val form = bookingEntryForm.fill(BookingEntry.blank)
+      val form = bookingEntryForm.fill(BookingEntry())
       val currentUser = request.user.asInstanceOf[LoginIdentity].userAccount
       val (fromAccounts, toAccounts) = findFromAndToAccounts(currentUser)
 

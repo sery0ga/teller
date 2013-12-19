@@ -41,7 +41,7 @@ class BookingEntrySpec extends Specification with Tables {
     "0.10" ! 95 ! "0.09" |> {
       (sourceAmount, percentage, result) ⇒
         val source = Money.of(CurrencyUnit.EUR, BigDecimal(sourceAmount).underlying())
-        val entry = BookingEntry.blank.copy(source = source, sourcePercentage = percentage)
+        val entry = BookingEntry(source = source, sourcePercentage = percentage)
         val sourceProRataAmount = BigDecimal(entry.sourceProRata.getAmount)
         sourceProRataAmount.scale must be equalTo 2
         sourceProRataAmount must be equalTo BigDecimal(result)

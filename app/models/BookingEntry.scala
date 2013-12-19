@@ -55,13 +55,14 @@ case class BookingEntry(
   toAmount: Money,
 
   brandId: Long,
-  reference: Option[String],
-  referenceDate: LocalDate,
-  description: Option[String] = None,
-  url: Option[String] = None,
-  transactionTypeId: Option[Long] = None,
+  created: DateTime,
+  overflow: BookingEntryOverflow) {
 
-  created: DateTime = DateTime.now()) {
+  def reference = overflow.reference
+  def referenceDate = overflow.referenceDate.getOrElse(bookingDate)
+  def description = overflow.description
+  def url = overflow.url
+  def transactionTypeId = overflow.transactionTypeId
 
   def from = Account.find(fromId).get
 
@@ -78,6 +79,7 @@ case class BookingEntry(
   def insert: BookingEntry = withSession { implicit session ⇒
     val nextBookingNumber = Some(BookingEntry.nextBookingNumber)
     val id = BookingEntries.forInsert.insert(this.copy(bookingNumber = nextBookingNumber))
+    Query(BookingEntriesOverflow).filter(_.id === id).update(overflow.copy(id = Some(id)))
     this.copy(id = Some(id), bookingNumber = nextBookingNumber)
   }
 
@@ -106,6 +108,17 @@ case class BookingEntry(
 }
 
 /**
+ * Case class for additional booking entry fields, to continue beyond the 22 column limit imposed by Slick.
+ */
+case class BookingEntryOverflow(
+  id: Option[Long] = None,
+  reference: Option[String] = None,
+  referenceDate: Option[LocalDate] = Some(LocalDate.now),
+  description: Option[String] = None,
+  url: Option[String] = None,
+  transactionTypeId: Option[Long] = None)
+
+/**
  * A view on a booking entry for the overview page.
  */
 case class BookingEntrySummary(
@@ -125,11 +138,36 @@ case class BookingEntrySummary(
 
 object BookingEntry {
 
-  def blank = BookingEntry(None, 0L, LocalDate.now, None, "", Money.of(CurrencyUnit.EUR, 0f), 100,
-    0, Money.zero(CurrencyUnit.EUR), 0, Money.zero(CurrencyUnit.EUR), 0, None, LocalDate.now)
+  def apply(
+    id: Option[Long] = None,
+    ownerId: Long = 0L,
+    bookingDate: LocalDate = LocalDate.now,
+    bookingNumber: Option[Int] = None,
+    summary: String = "",
+    source: Money = Money.zero(CurrencyUnit.EUR),
+    sourcePercentage: Int = 100,
+    fromId: Long = 0L,
+    fromAmount: Money = Money.zero(CurrencyUnit.EUR),
+    toId: Long = 0L,
+    toAmount: Money = Money.zero(CurrencyUnit.EUR),
+    brandId: Long = 0L,
+    reference: Option[String] = None,
+    referenceDate: LocalDate = LocalDate.now,
+    description: Option[String] = None,
+    url: Option[String] = None,
+    transactionTypeId: Option[Long] = None,
+    created: DateTime = DateTime.now): BookingEntry =
+    BookingEntry(id, ownerId, bookingDate, bookingNumber, summary, source, sourcePercentage, fromId, fromAmount,
+      toId, toAmount, brandId, created, BookingEntryOverflow(None, reference, Some(referenceDate), description, url, transactionTypeId))
 
+  /**
+   * Returns the booking entry with the given number, after doing a separate query for the overflow fields.
+   */
   def findByBookingNumber(bookingNumber: Int): Option[BookingEntry] = withSession { implicit session ⇒
-    Query(BookingEntries).filter(_.bookingNumber === bookingNumber).firstOption
+    Query(BookingEntries).filter(_.bookingNumber === bookingNumber).firstOption.map { entry ⇒
+      val overflow = Query(BookingEntriesOverflow).filter(_.id === entry.id).firstOption
+      entry.copy(overflow = overflow.getOrElse(BookingEntryOverflow()))
+    }
   }
 
   // Define a query that does left outer joins on the to/from accounts’ optional person/organisation records.

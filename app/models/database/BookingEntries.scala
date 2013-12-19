@@ -27,7 +27,7 @@ package models.database
 import com.github.tototoshi.slick.JodaSupport._
 
 import models.JodaMoney._
-import models.BookingEntry
+import models.{ BookingEntry, BookingEntryOverflow }
 import org.joda.time.{ LocalDate, DateTime }
 import play.api.db.slick.Config.driver.simple._
 
@@ -55,11 +55,6 @@ object BookingEntries extends Table[BookingEntry]("BOOKING_ENTRY") {
   def toAmount = column[BigDecimal]("TO_AMOUNT", O.DBType("DECIMAL(13,3)"))
 
   def brandId = column[Long]("BRAND_ID")
-  def reference = column[Option[String]]("REFERENCE")
-  def referenceDate = column[LocalDate]("REFERENCE_DATE")
-  def description = column[Option[String]]("DESCRIPTION")
-  def url = column[Option[String]]("URL")
-  def transactionTypeId = column[Option[Long]]("TRANSACTION_TYPE_ID")
 
   def created = column[DateTime]("CREATED")
 
@@ -67,29 +62,40 @@ object BookingEntries extends Table[BookingEntry]("BOOKING_ENTRY") {
   def from = foreignKey("BOOKING_FROM_FK", fromId, Accounts)(_.id)
   def to = foreignKey("BOOKING_TO_FK", toId, Accounts)(_.id)
   def brand = foreignKey("BOOKING_BRAND_FK", brandId, Brands)(_.id)
-  def transactionType = foreignKey("TRANSACTION_TYPE_FK", transactionTypeId, TransactionTypes)(_.id)
 
-  def * = id.? ~ ownerId ~ bookingDate ~ bookingNumber.? ~ summary ~
-    sourceCurrency ~ sourceAmount ~ sourcePercentage ~ fromId ~ fromCurrency ~ fromAmount ~ toId ~ toCurrency ~ toAmount ~
-    brandId ~ reference ~ referenceDate ~ description ~ url ~ transactionTypeId ~ created <> (
+  def * = id.? ~ ownerId ~ bookingDate ~ bookingNumber.? ~ summary ~ sourceCurrency ~ sourceAmount ~ sourcePercentage ~
+    fromId ~ fromCurrency ~ fromAmount ~ toId ~ toCurrency ~ toAmount ~ brandId ~ created <> (
       { (e) ⇒
         e match {
-          case (id, ownerId, bookingDate, bookingNumber, summary,
-            sourceCurrency, sourceAmount, sourcePercentage, fromId, fromCurrency, fromAmount, toId, toCurrency, toAmount,
-            brandId, reference, referenceDate, description, url, transactionTypeId, created) ⇒
+          case (id, ownerId, bookingDate, bookingNumber, summary, sourceCurrency, sourceAmount, sourcePercentage,
+            fromId, fromCurrency, fromAmount, toId, toCurrency, toAmount, brandId, created) ⇒
 
-            BookingEntry(id, ownerId, bookingDate, bookingNumber, summary,
-              sourceCurrency -> sourceAmount, sourcePercentage, fromId, fromCurrency -> fromAmount, toId, toCurrency -> toAmount,
-              brandId, reference, referenceDate, description, url, transactionTypeId, created)
+            BookingEntry(id, ownerId, bookingDate, bookingNumber, summary, sourceCurrency -> sourceAmount,
+              sourcePercentage, fromId, fromCurrency -> fromAmount, toId, toCurrency -> toAmount, brandId)
         }
       },
       { (e: BookingEntry) ⇒
-        Some((e.id, e.ownerId, e.bookingDate, e.bookingNumber, e.summary,
-          e.source.getCurrencyUnit.getCode, e.source.getAmount, e.sourcePercentage,
-          e.fromId, e.fromAmount.getCurrencyUnit.getCode, e.fromAmount.getAmount,
-          e.toId, e.toAmount.getCurrencyUnit.getCode, e.toAmount.getAmount,
-          e.brandId, e.reference, e.referenceDate, e.description, e.url, e.transactionTypeId, e.created))
+        Some((e.id, e.ownerId, e.bookingDate, e.bookingNumber, e.summary, e.source.getCurrencyUnit.getCode,
+          e.source.getAmount, e.sourcePercentage, e.fromId, e.fromAmount.getCurrencyUnit.getCode,
+          e.fromAmount.getAmount, e.toId, e.toAmount.getCurrencyUnit.getCode, e.toAmount.getAmount, e.brandId, e.created))
       })
 
   def forInsert = * returning id
+}
+
+/**
+ * Additional columns that exceed the 22-element limit on the * projection’s tuple.
+ */
+object BookingEntriesOverflow extends Table[BookingEntryOverflow]("BOOKING_ENTRY") {
+
+  def id = column[Long]("ID", O.PrimaryKey, O.AutoInc)
+  def reference = column[Option[String]]("REFERENCE")
+  def referenceDate = column[Option[LocalDate]]("REFERENCE_DATE")
+  def description = column[Option[String]]("DESCRIPTION")
+  def url = column[Option[String]]("URL")
+  def transactionTypeId = column[Option[Long]]("TRANSACTION_TYPE_ID")
+
+  def transactionType = foreignKey("TRANSACTION_TYPE_FK", transactionTypeId, TransactionTypes)(_.id)
+
+  def * = id.? ~ reference ~ referenceDate ~ description ~ url ~ transactionTypeId <> (BookingEntryOverflow.apply _, BookingEntryOverflow.unapply _)
 }
